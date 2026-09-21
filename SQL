@@ -1,0 +1,64 @@
+-- Query 1: Create a staging table with cleaned values and proper data types
+--------------------------------------------------------------------------------
+CREATE TABLE cleaned_amazon_sales AS
+SELECT
+    TRIM(`Order ID`) AS order_id,
+    STR_TO_DATE(TRIM(`Date`), '%m-%d-%Y') AS order_date,
+    TRIM(`Status`) AS order_status,
+    TRIM(`Category`) AS category,
+    UPPER(TRIM(`Size`)) AS clothing_size,
+    COALESCE(`Qty`, 0) AS quantity,
+    COALESCE(`Amount`, 0.00) AS revenue,
+    UPPER(TRIM(`ship-city`)) AS shipping_city,
+    UPPER(TRIM(`ship-state`)) AS shipping_state,
+    TRIM(`ship-postal-code`) AS postal_code,
+    TRIM(`Fulfilment`) AS fulfillment_type,
+    TRIM(`Sales Channel`) AS sales_channel
+FROM raw_amazon_sales;
+
+
+-- Query 2: Remove rows with missing essential identifiers
+--------------------------------------------------------------------------------
+DELETE FROM cleaned_amazon_sales
+WHERE order_id IS NULL OR order_id = ''
+   OR order_date IS NULL;
+
+
+-- Query 3: Standardize text casing for category and status
+--------------------------------------------------------------------------------
+UPDATE cleaned_amazon_sales
+SET category = CONCAT(UPPER(SUBSTRING(category, 1, 1)), LOWER(SUBSTRING(category, 2))),
+    order_status = CONCAT(UPPER(SUBSTRING(order_status, 1, 1)), LOWER(SUBSTRING(order_status, 2)));
+
+
+-- Query 4: Standardize variant order status text
+--------------------------------------------------------------------------------
+UPDATE cleaned_amazon_sales
+SET order_status = 'Shipped'
+WHERE order_status LIKE '%ship%';
+
+UPDATE cleaned_amazon_sales
+SET order_status = 'Cancelled'
+WHERE order_status LIKE '%canc%';
+
+
+-- Query 5: Remove duplicate order records
+--------------------------------------------------------------------------------
+DELETE t1 FROM cleaned_amazon_sales t1
+INNER JOIN cleaned_amazon_sales t2 
+WHERE t1.order_id = t2.order_id 
+  AND t1.order_date = t2.order_date
+  AND t1.category = t2.category
+  AND t1.clothing_size = t2.clothing_size
+  AND t1.revenue = t2.revenue
+  AND t1.quantity = t2.quantity
+  AND t1.order_id < t2.order_id;
+
+
+-- Query 6: Verify cleaned row count and check for nulls
+--------------------------------------------------------------------------------
+SELECT COUNT(*) AS total_rows FROM cleaned_amazon_sales;
+
+SELECT COUNT(*) AS missing_revenue_rows 
+FROM cleaned_amazon_sales 
+WHERE revenue IS NULL OR quantity IS NULL;
